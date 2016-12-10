@@ -5,7 +5,8 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.Dataset
 import Main.spark.implicits._
 import org.apache.spark.sql.functions.udf
- 
+import org.apache.spark.sql.functions.isnull
+
 object Provided {
   
   def loadAirLineTweets(): Dataset[LabeledTweet] = {
@@ -17,10 +18,12 @@ object Provided {
       case "neutral" => 0
       case "positive" => 1
       case "negative" => -1
+      case _ => 0
     }
     
     val sentimentFunc = udf(convertSentiment)
-  
+    def isNotEmptyUdf = udf[Boolean, String](text => text != null && !text.isEmpty)
+    
     Main.spark.read
               .option("header", "true")
               .option("inferSchema", "true")
@@ -28,8 +31,9 @@ object Provided {
               .withColumn("sentiment", sentimentFunc('airline_sentiment))
               .select('sentiment, 'text)
               .withColumnRenamed("sentiment", "label")
+              .filter(isNotEmptyUdf('text))
               .as[LabeledTweet]
   }
 }
 
-case class LabeledTweet(label: Int, text: String)
+case class LabeledTweet(label: Double, text: String)

@@ -23,7 +23,7 @@ object SentimentModel {
   }
   
   def posTagAReview(tweet : LabeledTweet, pipeline : StanfordCoreNLP) = {
-    val text = tweet.text
+    val text = tweet.text.filter(_.isLetterOrDigit)
 	  val document = new Annotation(text)
 	  pipeline.annotate(document)
 	  
@@ -42,9 +42,13 @@ object SentimentModel {
       sentiment
 	  }
     
-    val totalSentiment = sentiments.sum 
+    val totalSentiment = sentiments.sum match {
+      case negative if(negative < -5) => -1
+      case positive if(positive > 0) => 1
+      case _ => 0 //neutral
+    }
 
-	  SentimentTweet(tweet.label, tweet.text, totalSentiment)
+	  SentimentTweet(tweet.label, tweet.text, totalSentiment.toDouble)
 	}
 
   //creates and initializes the Stanford NLP object
@@ -55,4 +59,4 @@ object SentimentModel {
 	}
 }
 
-case class SentimentTweet(label: Int, text: String, sentiment: Int)
+case class SentimentTweet(label: Double, text: String, sentiment: Double)

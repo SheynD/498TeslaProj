@@ -6,6 +6,7 @@ import org.apache.spark.rdd.RDD
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.sql.Dataset
 import org.apache.spark.sql.functions._
+import org.apache.spark.ml.evaluation.MulticlassClassificationEvaluator
 
 object Main {
 
@@ -25,9 +26,20 @@ object Main {
 	  
 	  val tweetDS = Provided.loadAirLineTweets
 	  
-	  SentimentModel.computeSentiment(tweetDS).show
+	  tweetDS.show
 	  
+	  val tweetsWithSenitmentDS = SentimentModel.computeSentiment(tweetDS)
 	  
+	  tweetsWithSenitmentDS.show
+	  
+	  val evaluator = new MulticlassClassificationEvaluator()
+      .setLabelCol("label")
+      .setPredictionCol("sentiment")
+      .setMetricName("accuracy")
+	  
+    val accuracy = evaluator.evaluate(tweetsWithSenitmentDS)
+    println(s"Accuracy: $accuracy")  
+      
 	  /*
 	  val teslaDS: Dataset[Tweet] = Preprocessing.loadTeslaTweets	  
 	  println(teslaDS.count)
