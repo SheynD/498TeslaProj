@@ -23,12 +23,18 @@ object Main {
   //entry point    
 	def main(args: Array[String]) : Unit = {
 	  
+	  Provided.loadAirLineTweets.show
+	  
+	  
+	  /*
 	  val teslaDS: Dataset[Tweet] = Preprocessing.loadTeslaTweets	  
+	  println(teslaDS.count)
     //Graph.plotTweetsPerDay(teslaDS, true)
 	  
     val teslaStockPriceDS: Dataset[StockPrice] = Preprocessing.loadTeslaStockPrice
     //Graph.plotStockPerDay(teslaStockPriceDS, true)
     
     Graph.plotStockAndTweetsPerDay(teslaDS, teslaStockPriceDS)
-  }
+  	*/
+	}
 }
