@@ -8,7 +8,7 @@ import org.apache.spark.sql.functions.udf
  
 object Provided {
   
-  def loadAirLineTweets(): Dataset[SentimentTweet] = {
+  def loadAirLineTweets(): Dataset[LabeledTweet] = {
     //CSV schema
     //tweet_id,airline_sentiment,airline_sentiment_confidence,negativereason,negativereason_confidence,
     //airline,airline_sentiment_gold,name,negativereason_gold,retweet_count,text,tweet_coord,tweet_created,tweet_location,user_timezone
@@ -27,8 +27,9 @@ object Provided {
               .csv("data/provided/airline.csv")
               .withColumn("sentiment", sentimentFunc('airline_sentiment))
               .select('sentiment, 'text)
-              .as[SentimentTweet]
+              .withColumnRenamed("sentiment", "label")
+              .as[LabeledTweet]
   }
 }
 
-case class SentimentTweet(sentiment: Int, text: String)
+case class LabeledTweet(label: Int, text: String)

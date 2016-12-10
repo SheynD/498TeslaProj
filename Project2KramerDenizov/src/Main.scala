@@ -23,7 +23,9 @@ object Main {
   //entry point    
 	def main(args: Array[String]) : Unit = {
 	  
-	  Provided.loadAirLineTweets.show
+	  val tweetDS = Provided.loadAirLineTweets
+	  
+	  SentimentModel.computeSentiment(tweetDS).show
 	  
 	  
 	  /*
