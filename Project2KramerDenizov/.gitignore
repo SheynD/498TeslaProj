@@ -18,7 +18,6 @@ project/plugins/project/
 
 data/*
 bin/*
-pom.xml
 .cache-main
 .classpath
 .project
