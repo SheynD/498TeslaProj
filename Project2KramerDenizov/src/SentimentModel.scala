@@ -11,19 +11,30 @@ import edu.stanford.nlp.ling._
 import Main.spark.implicits._
 import org.apache.spark.util.collection._
 import org.apache.spark.sql.Dataset
+import org.apache.spark.ml.feature.Word2Vec
+
 
 object SentimentModel {
   
 
   def computeSentiment(tweetDS: Dataset[LabeledTweet]): Dataset[SentimentTweet] = {
+    println(s"Size is ${tweetDS.count}")
     tweetDS.mapPartitions{ part => 
 	    val pipeline = createStandfordNLP
-	    part.map(tweet => posTagAReview(tweet, pipeline))
+	    part.map(tweet => performSentiment(tweet, pipeline))
 	  }
   }
   
-  def posTagAReview(tweet : LabeledTweet, pipeline : StanfordCoreNLP) = {
-    val text = tweet.text.filter(_.isLetterOrDigit)
+  var count = 20
+  
+  def performSentiment(tweet : LabeledTweet, pipeline : StanfordCoreNLP) = {
+    val emojiPattern = """[\p{So}+|\uFE0F]"""
+    val handlePattern = """@[\w|_]+"""
+    val text = tweet.text.replaceAll(emojiPattern, "").replaceAll(handlePattern, "")
+    if(count > 0){
+    println(text)
+    count -= 1
+    }
 	  val document = new Annotation(text)
 	  pipeline.annotate(document)
 	  
@@ -38,20 +49,20 @@ object SentimentModel {
         case 3 => 1 //positive
         case 4 => 2 //very positive
       }
-     
       sentiment
 	  }
     
     val totalSentiment = sentiments.sum match {
-      case negative if(negative < -5) => -1
-      case positive if(positive > 0) => 1
-      case _ => 0 //neutral
+      case negative if(negative < -3) => -1
+      case positive if(positive > 1) => 1
+      case neutral => 0
     }
 
 	  SentimentTweet(tweet.label, tweet.text, totalSentiment.toDouble)
 	}
 
   //creates and initializes the Stanford NLP object
+	
 	def createStandfordNLP() : StanfordCoreNLP = {
 	  val stanfordProps = new Properties()
     stanfordProps.put("annotators", "tokenize, ssplit, parse, sentiment")

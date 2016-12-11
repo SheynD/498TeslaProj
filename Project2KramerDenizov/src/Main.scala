@@ -24,13 +24,17 @@ object Main {
   //entry point    
 	def main(args: Array[String]) : Unit = {
 	  
+	  val startTime = System.nanoTime
+	  
 	  val tweetDS = Provided.loadAirLineTweets
 	  
 	  tweetDS.show
 	  
 	  val tweetsWithSenitmentDS = SentimentModel.computeSentiment(tweetDS)
-	  
 	  tweetsWithSenitmentDS.show
+	  
+	  //val tweetsWithFeatures = SentimentModel.word2Vec(tweetDS)
+	  //tweetsWithFeatures.show
 	  
 	  val evaluator = new MulticlassClassificationEvaluator()
       .setLabelCol("label")
@@ -39,7 +43,10 @@ object Main {
 	  
     val accuracy = evaluator.evaluate(tweetsWithSenitmentDS)
     println(s"Accuracy: $accuracy")  
-      
+    
+    val totalTime = (System.nanoTime - startTime)/1E9
+    println(s"Time: $totalTime")
+    
 	  /*
 	  val teslaDS: Dataset[Tweet] = Preprocessing.loadTeslaTweets	  
 	  println(teslaDS.count)
