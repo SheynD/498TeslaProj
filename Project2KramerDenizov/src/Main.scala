@@ -7,6 +7,8 @@ import org.apache.log4j.{Level, Logger}
 import org.apache.spark.sql.Dataset
 import org.apache.spark.sql.functions._
 import org.apache.spark.ml.evaluation.MulticlassClassificationEvaluator
+import org.apache.spark.ml.classification.{RandomForestClassificationModel, RandomForestClassifier}
+import org.apache.spark.ml.classification.MultilayerPerceptronClassifier
 
 object Main {
 
@@ -27,15 +29,47 @@ object Main {
 	  val startTime = System.nanoTime
 	  
 	  val tweetDS = Provided.loadAirLineTweets
+	   
+	  val result = SentimentModel.computeWord2Vec(tweetDS)
 	  
-	  tweetDS.show
+	  val Array(training, testing) = result.randomSplit(Array(0.7, 0.3))
 	  
-	  val tweetsWithSenitmentDS = SentimentModel.computeSentiment(tweetDS)
-	  tweetsWithSenitmentDS.show
+	  val rf = new RandomForestClassifier()
+            .setLabelCol("label")
+            .setFeaturesCol("result")
+            .setNumTrees(100)
+	   
+    val rfModel = rf.fit(training)
+    val rfPredictions = rfModel.transform(testing)
+    rfPredictions.show
+    
+    
+    val layers = Array[Int](50, 100, 80, 100, 3)
+    
+    val trainer = new MultilayerPerceptronClassifier()
+	                    .setLabelCol("label")
+                      .setFeaturesCol("result")
+                      .setLayers(layers)
+                      .setBlockSize(128)
+                      .setMaxIter(100)
+                      
+  val nnModel = trainer.fit(training)
+  val nnResult = nnModel.transform(testing)
+  
+    val evaluator = new MulticlassClassificationEvaluator()
+      .setLabelCol("label")
+      .setPredictionCol("prediction")
+      .setMetricName("accuracy")
 	  
+    val accuracy = evaluator.evaluate(nnResult)
+    println(s"accuracy $accuracy")
+
+    
+    
 	  //val tweetsWithFeatures = SentimentModel.word2Vec(tweetDS)
 	  //tweetsWithFeatures.show
 	  
+	   /*
 	  val evaluator = new MulticlassClassificationEvaluator()
       .setLabelCol("label")
       .setPredictionCol("sentiment")
@@ -46,7 +80,8 @@ object Main {
     
     val totalTime = (System.nanoTime - startTime)/1E9
     println(s"Time: $totalTime")
-    
+    */
+	    
 	  /*
 	  val teslaDS: Dataset[Tweet] = Preprocessing.loadTeslaTweets	  
 	  println(teslaDS.count)
@@ -54,7 +89,7 @@ object Main {
 	  
     val teslaStockPriceDS: Dataset[StockPrice] = Preprocessing.loadTeslaStockPrice
     //Graph.plotStockPerDay(teslaStockPriceDS, true)
-    
+     * 
     Graph.plotStockAndTweetsPerDay(teslaDS, teslaStockPriceDS)
   	*/
 	}

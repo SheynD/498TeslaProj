@@ -15,13 +15,15 @@ object Provided {
     //airline,airline_sentiment_gold,name,negativereason_gold,retweet_count,text,tweet_coord,tweet_created,tweet_location,user_timezone
   
     val convertSentiment: (String => Int) = (sentiment: String) => sentiment match {
-      case "neutral" => 0
-      case "positive" => 1
-      case "negative" => -1
-      case _ => 0
+      case "neutral" => 1
+      case "positive" => 2
+      case "negative" => 0
+      case _ => 1
     }
     
     val sentimentFunc = udf(convertSentiment)
+    
+    //a filter for removing empty row
     def isNotEmptyUdf = udf[Boolean, String](text => text != null && !text.isEmpty)
     
     Main.spark.read
@@ -36,4 +38,4 @@ object Provided {
   }
 }
 
-case class LabeledTweet(label: Double, text: String)
+case class LabeledTweet(label: Double, override val text: String) extends Tweet(text)

@@ -12,29 +12,25 @@ import Main.spark.implicits._
 import org.apache.spark.util.collection._
 import org.apache.spark.sql.Dataset
 import org.apache.spark.ml.feature.Word2Vec
-
+import org.apache.spark.ml.linalg.Vector
 
 object SentimentModel {
-  
+  val emojiPattern = """[\p{So}+|\uFE0F]"""
+  val handlePattern = """@[\w|_]+"""
 
-  def computeSentiment(tweetDS: Dataset[LabeledTweet]): Dataset[SentimentTweet] = {
-    println(s"Size is ${tweetDS.count}")
+  def computeSentiment(tweetDS: Dataset[LabeledTweet]) = {
     tweetDS.mapPartitions{ part => 
 	    val pipeline = createStandfordNLP
 	    part.map(tweet => performSentiment(tweet, pipeline))
 	  }
   }
   
-  var count = 20
+
+  def performSentiment(tweet : Tweet, pipeline : StanfordCoreNLP) = {
   
-  def performSentiment(tweet : LabeledTweet, pipeline : StanfordCoreNLP) = {
-    val emojiPattern = """[\p{So}+|\uFE0F]"""
-    val handlePattern = """@[\w|_]+"""
-    val text = tweet.text.replaceAll(emojiPattern, "").replaceAll(handlePattern, "")
-    if(count > 0){
-    println(text)
-    count -= 1
-    }
+    val text = tweet.text.replaceAll(emojiPattern, "")
+                         .replaceAll(handlePattern, "")
+
 	  val document = new Annotation(text)
 	  pipeline.annotate(document)
 	  
@@ -53,21 +49,42 @@ object SentimentModel {
 	  }
     
     val totalSentiment = sentiments.sum match {
-      case negative if(negative < -3) => -1
-      case positive if(positive > 1) => 1
-      case neutral => 0
+      case negative if(negative < -3) => 0
+      case positive if(positive > 1) => 2
+      case neutral => 1
     }
 
-	  SentimentTweet(tweet.label, tweet.text, totalSentiment.toDouble)
+    tweet match{
+      case labeledTweet : LabeledTweet => SentimentTweet(tweet.asInstanceOf[LabeledTweet].label, tweet.text, totalSentiment.toDouble)
+    }
 	}
-
   //creates and initializes the Stanford NLP object
-	
 	def createStandfordNLP() : StanfordCoreNLP = {
 	  val stanfordProps = new Properties()
     stanfordProps.put("annotators", "tokenize, ssplit, parse, sentiment")
     new StanfordCoreNLP(stanfordProps)
 	}
+	
+	def computeWord2Vec(tweetDS: Dataset[LabeledTweet]) = {
+	  val word2vec = new Word2Vec()
+  	                    .setInputCol("wordsArray")
+  	                    .setOutputCol("result")
+                        .setVectorSize(50)
+                        .setMinCount(0)
+                        
+    val tweetDSWithArray: Dataset[TempWord2VecTweet] = tweetDS.map{ labeledTweet => 
+      val wordsArray = labeledTweet.text.replaceAll(handlePattern, "").split(" ").filterNot(_.isEmpty)
+      TempWord2VecTweet(labeledTweet.label, labeledTweet.text, wordsArray)
+    }
+
+	  val model = word2vec.fit(tweetDSWithArray)
+	  model.transform(tweetDSWithArray)
+	}
+	
+	
 }
 
-case class SentimentTweet(label: Double, text: String, sentiment: Double)
+class Tweet(val text: String)
+case class SentimentTweet(label: Double, override val text: String, sentiment: Double) extends Tweet(text)
+case class LabeledWord2VecTweet(label: Double, override val text: String, vector: Vector) extends Tweet(text)
+case class TempWord2VecTweet(label: Double, text: String, wordsArray: Array[String])                   
