@@ -9,6 +9,8 @@ import org.apache.spark.sql.functions._
 import org.apache.spark.ml.evaluation.MulticlassClassificationEvaluator
 import org.apache.spark.ml.classification.{RandomForestClassificationModel, RandomForestClassifier}
 import org.apache.spark.ml.classification.MultilayerPerceptronClassifier
+import org.apache.spark.ml.classification.NaiveBayes
+import org.apache.spark.sql.functions.udf
 
 object Main {
 
@@ -29,57 +31,85 @@ object Main {
 	  val startTime = System.nanoTime
 	  
 	  val tweetDS = Provided.loadAirLineTweets
-	   
+	  
+	  println("Num negative: " + tweetDS.filter('label === 0.0).count)
+	  println("Num neutral: " + tweetDS.filter('label === 1.0).count)
+	  println("Num positive: " + tweetDS.filter('label === 2.0).count)
+	  
+	  /* 
 	  val result = SentimentModel.computeWord2Vec(tweetDS)
 	  
 	  val Array(training, testing) = result.randomSplit(Array(0.7, 0.3))
 	  
+	  //random forest
 	  val rf = new RandomForestClassifier()
             .setLabelCol("label")
-            .setFeaturesCol("result")
+            .setFeaturesCol("features")
             .setNumTrees(100)
 	   
     val rfModel = rf.fit(training)
-    val rfPredictions = rfModel.transform(testing)
-    rfPredictions.show
-    
-    
+
+    //perceptron
     val layers = Array[Int](50, 100, 80, 100, 3)
     
     val trainer = new MultilayerPerceptronClassifier()
 	                    .setLabelCol("label")
-                      .setFeaturesCol("result")
+                      .setFeaturesCol("features")
                       .setLayers(layers)
                       .setBlockSize(128)
                       .setMaxIter(100)
                       
-  val nnModel = trainer.fit(training)
-  val nnResult = nnModel.transform(testing)
-  
-    val evaluator = new MulticlassClassificationEvaluator()
+    val nnModel = trainer.fit(training)
+    
+    
+    
+    //naive bayes
+    val nbModel = new NaiveBayes()
+	                   .fit(training)
+    
+	  //ensemble                  
+	  val rfPredictions = rfModel.transform(testing)
+	                             .select('label, 'id, 'text, 'prediction)
+	                             .withColumnRenamed("prediction", "rfPrediction")
+	  
+	  val nnPredictions = nnModel.transform(testing)
+	                             .select('label, 'id, 'text, 'prediction)
+	                             .withColumnRenamed("prediction", "nnPrediction") 
+	  
+	  val nbPredictions = nbModel.transform(testing) 
+	                             .select('label, 'id, 'text, 'prediction)
+	                             .withColumnRenamed("prediction", "nbPrediction")
+	  
+	  val allPredictions = rfPredictions.join(nnPredictions, Seq("label","id","text")).join(nbPredictions, Seq("label","id","text"))
+	                             
+	  def rankedVoting: (Double, Double, Double) => Double = (pred1: Double, pred2: Double, pred3: Double) => { 
+	    val votes = Array(pred1, pred2, pred3)
+	    val groupedVotes = votes.groupBy(identity) //group by votes
+	                            .mapValues(_.length) //count votes
+	    if(groupedVotes.keys.size == 3){
+	      1.0 //neutral, they all disagree
+	    }else{
+	      groupedVotes.maxBy(_._2)._1 //max of vote count and grab label
+	    }
+	  }          
+	  
+	  val rankedVotingUDF = udf(rankedVoting)
+	  
+	  val ensomblePredictions = allPredictions.withColumn("prediction", rankedVotingUDF($"rfPrediction", $"nnPrediction", $"nbPrediction"))
+	  
+	  ensomblePredictions.sort('label desc).show(200)
+	  
+	  val evaluator = new MulticlassClassificationEvaluator()
       .setLabelCol("label")
       .setPredictionCol("prediction")
       .setMetricName("accuracy")
 	  
-    val accuracy = evaluator.evaluate(nnResult)
+    val accuracy = evaluator.evaluate(ensomblePredictions)
     println(s"accuracy $accuracy")
 
-    
-    
-	  //val tweetsWithFeatures = SentimentModel.word2Vec(tweetDS)
-	  //tweetsWithFeatures.show
-	  
-	   /*
-	  val evaluator = new MulticlassClassificationEvaluator()
-      .setLabelCol("label")
-      .setPredictionCol("sentiment")
-      .setMetricName("accuracy")
-	  
-    val accuracy = evaluator.evaluate(tweetsWithSenitmentDS)
-    println(s"Accuracy: $accuracy")  
-    
     val totalTime = (System.nanoTime - startTime)/1E9
     println(s"Time: $totalTime")
+    
     */
 	    
 	  /*

@@ -13,11 +13,12 @@ import org.apache.spark.util.collection._
 import org.apache.spark.sql.Dataset
 import org.apache.spark.ml.feature.Word2Vec
 import org.apache.spark.ml.linalg.Vector
+import org.apache.spark.ml.feature.MinMaxScaler
 
 object SentimentModel {
   val emojiPattern = """[\p{So}+|\uFE0F]"""
   val handlePattern = """@[\w|_]+"""
-
+  
   def computeSentiment(tweetDS: Dataset[LabeledTweet]) = {
     tweetDS.mapPartitions{ part => 
 	    val pipeline = createStandfordNLP
@@ -55,7 +56,7 @@ object SentimentModel {
     }
 
     tweet match{
-      case labeledTweet : LabeledTweet => SentimentTweet(tweet.asInstanceOf[LabeledTweet].label, tweet.text, totalSentiment.toDouble)
+      case labeledTweet : LabeledTweet => SentimentTweet(tweet.asInstanceOf[LabeledTweet].label, tweet.text, tweet.id, totalSentiment.toDouble)
     }
 	}
   //creates and initializes the Stanford NLP object
@@ -73,18 +74,26 @@ object SentimentModel {
                         .setMinCount(0)
                         
     val tweetDSWithArray: Dataset[TempWord2VecTweet] = tweetDS.map{ labeledTweet => 
-      val wordsArray = labeledTweet.text.replaceAll(handlePattern, "").split(" ").filterNot(_.isEmpty)
-      TempWord2VecTweet(labeledTweet.label, labeledTweet.text, wordsArray)
+      val words = labeledTweet.text.replaceAll(handlePattern, "").split(" ").filterNot(_.isEmpty).filter(_.exists(c => c.isLetterOrDigit))
+      TempWord2VecTweet(labeledTweet.label, labeledTweet.text, labeledTweet.id, words)
     }
 
 	  val model = word2vec.fit(tweetDSWithArray)
-	  model.transform(tweetDSWithArray)
+	  val tweetDSWithWord2Vec = model.transform(tweetDSWithArray)
+	  
+	  //scale 0 to 1 for naive bayes 
+	  val scaler = new MinMaxScaler()
+                .setInputCol("result")
+                .setOutputCol("features")
+                
+    val scalerModel = scaler.fit(tweetDSWithWord2Vec)
+    scalerModel.transform(tweetDSWithWord2Vec).as[LabeledWord2VecTweet]            
 	}
 	
 	
 }
 
-class Tweet(val text: String)
-case class SentimentTweet(label: Double, override val text: String, sentiment: Double) extends Tweet(text)
-case class LabeledWord2VecTweet(label: Double, override val text: String, vector: Vector) extends Tweet(text)
-case class TempWord2VecTweet(label: Double, text: String, wordsArray: Array[String])                   
+class Tweet(val text: String, val id: Long)
+case class SentimentTweet(label: Double, override val text: String, override val id: Long, sentiment: Double) extends Tweet(text, id)
+case class LabeledWord2VecTweet(label: Double, override val text: String, override val id: Long, features: Vector) extends Tweet(text, id)
+case class TempWord2VecTweet(label: Double, text: String, id: Long, wordsArray: Array[String])                   

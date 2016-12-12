@@ -6,6 +6,7 @@ import org.apache.spark.sql.Dataset
 import Main.spark.implicits._
 import org.apache.spark.sql.functions.udf
 import org.apache.spark.sql.functions.isnull
+import org.apache.spark.sql.types._
 
 object Provided {
   
@@ -25,17 +26,23 @@ object Provided {
     
     //a filter for removing empty row
     def isNotEmptyUdf = udf[Boolean, String](text => text != null && !text.isEmpty)
+    def isDigitsUdf = udf[Boolean, String](idAsString => idAsString.forall(_.isDigit))
     
     Main.spark.read
               .option("header", "true")
               .option("inferSchema", "true")
               .csv("data/provided/airline.csv")
               .withColumn("sentiment", sentimentFunc('airline_sentiment))
-              .select('sentiment, 'text)
+              .select('sentiment, 'text, 'tweet_id)
               .withColumnRenamed("sentiment", "label")
+              .withColumnRenamed("tweet_id", "id")
               .filter(isNotEmptyUdf('text))
+              .filter(isDigitsUdf('id))
+              .withColumn("idTemp", $"id".cast(LongType))
+              .drop('id)
+              .withColumnRenamed("idTemp", "id")
               .as[LabeledTweet]
   }
 }
 
-case class LabeledTweet(label: Double, override val text: String) extends Tweet(text)
+case class LabeledTweet(label: Double, override val text: String, override val id: Long) extends Tweet(text, id)
