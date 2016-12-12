@@ -38,11 +38,8 @@ object Provided {
               .withColumnRenamed("tweet_id", "id")
               .filter(isNotEmptyUdf('text))
               .filter(isDigitsUdf('id))
-              .withColumn("idTemp", $"id".cast(LongType))
-              .drop('id)
-              .withColumnRenamed("idTemp", "id")
               .as[LabeledTweet]
   }
 }
 
-case class LabeledTweet(label: Double, override val text: String, override val id: Long) extends Tweet(text, id)
+case class LabeledTweet(label: Double, override val text: String, override val id: String) extends BaseTweet(text, id)

@@ -76,6 +76,7 @@ object Preprocessing {
   }
 }
 
+
 final case class Tweet(username: String,
                        timestamp: java.sql.Timestamp,
                        date: java.sql.Date,
@@ -86,7 +87,7 @@ final case class Tweet(username: String,
                        mentions: String,
                        hashtags: String,
                        id: String,
-                       permalink: String)
+                       permalink: String) extends Serializable 
                   
                        
 final case class StockPrice(date: java.sql.Date,

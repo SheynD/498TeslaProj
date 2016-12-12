@@ -19,7 +19,14 @@ object SentimentModel {
   val emojiPattern = """[\p{So}+|\uFE0F]"""
   val handlePattern = """@[\w|_]+"""
   
-  def computeSentiment(tweetDS: Dataset[LabeledTweet]) = {
+  def computeSentimentLabeledTweet(tweetDS: Dataset[LabeledTweet]) = {
+    tweetDS.mapPartitions{ part => 
+	    val pipeline = createStandfordNLP
+	    part.map(tweet => performSentiment(tweet, pipeline))
+	  }
+  }
+  
+   def computeSentimentDatedTweet(tweetDS: Dataset[DatedTweet]) = {
     tweetDS.mapPartitions{ part => 
 	    val pipeline = createStandfordNLP
 	    part.map(tweet => performSentiment(tweet, pipeline))
@@ -27,7 +34,7 @@ object SentimentModel {
   }
   
 
-  def performSentiment(tweet : Tweet, pipeline : StanfordCoreNLP) = {
+  def performSentiment(tweet : BaseTweet, pipeline : StanfordCoreNLP) = {
   
     val text = tweet.text.replaceAll(emojiPattern, "")
                          .replaceAll(handlePattern, "")
@@ -55,9 +62,8 @@ object SentimentModel {
       case neutral => 1
     }
 
-    tweet match{
-      case labeledTweet : LabeledTweet => SentimentTweet(tweet.asInstanceOf[LabeledTweet].label, tweet.text, tweet.id, totalSentiment.toDouble)
-    }
+    SentimentTweet(tweet.asInstanceOf[LabeledTweet].label, tweet.text, tweet.id, totalSentiment.toDouble)
+
 	}
   //creates and initializes the Stanford NLP object
 	def createStandfordNLP() : StanfordCoreNLP = {
@@ -66,7 +72,7 @@ object SentimentModel {
     new StanfordCoreNLP(stanfordProps)
 	}
 	
-	def computeWord2Vec(tweetDS: Dataset[LabeledTweet]) = {
+  def computeWord2Vec(tweetDS: Dataset[LabeledTweet]) = {
 	  val word2vec = new Word2Vec()
   	                    .setInputCol("wordsArray")
   	                    .setOutputCol("result")
@@ -87,13 +93,15 @@ object SentimentModel {
                 .setOutputCol("features")
                 
     val scalerModel = scaler.fit(tweetDSWithWord2Vec)
-    scalerModel.transform(tweetDSWithWord2Vec).as[LabeledWord2VecTweet]            
+    (scalerModel.transform(tweetDSWithWord2Vec).as[LabeledWord2VecTweet], model)            
 	}
-	
-	
+
 }
 
-class Tweet(val text: String, val id: Long)
-case class SentimentTweet(label: Double, override val text: String, override val id: Long, sentiment: Double) extends Tweet(text, id)
-case class LabeledWord2VecTweet(label: Double, override val text: String, override val id: Long, features: Vector) extends Tweet(text, id)
-case class TempWord2VecTweet(label: Double, text: String, id: Long, wordsArray: Array[String])                   
+class BaseTweet(val text: String, val id: String) extends Serializable 
+case class SentimentTweet(label: Double, override val text: String, override val id: String, sentiment: Double) extends BaseTweet(text, id)
+case class LabeledWord2VecTweet(label: Double, override val text: String, override val id: String, features: Vector) extends BaseTweet(text, id)
+case class TempWord2VecTweet(label: Double, text: String, id: String, wordsArray: Array[String])                   
+case class Word2VecTweet(date: java.sql.Date, override val text: String, override val id: String, wordsArray: Array[String]) extends BaseTweet(text, id)  
+case class DatedTweet(date: java.sql.Date, override val text: String, override val id: String) extends BaseTweet(text, id) 
+case class SentimentTweetNoLabel(date: java.sql.Date, override val text: String, override val id: String, sentiment: Double) extends BaseTweet(text, id)
