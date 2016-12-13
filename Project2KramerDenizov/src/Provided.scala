@@ -8,6 +8,7 @@ import org.apache.spark.sql.functions.udf
 import org.apache.spark.sql.functions.isnull
 import org.apache.spark.sql.types._
 
+//For getting the sentiment values and training on the airline tweets
 object Provided {
   
   def loadAirLineTweets(): Dataset[LabeledTweet] = {
@@ -15,6 +16,7 @@ object Provided {
     //tweet_id,airline_sentiment,airline_sentiment_confidence,negativereason,negativereason_confidence,
     //airline,airline_sentiment_gold,name,negativereason_gold,retweet_count,text,tweet_coord,tweet_created,tweet_location,user_timezone
   
+    //Convert the sentiment string to an integer value to sum and average sentiment scores for days
     val convertSentiment: (String => Int) = (sentiment: String) => sentiment match {
       case "neutral" => 1
       case "positive" => 2
@@ -28,6 +30,7 @@ object Provided {
     def isNotEmptyUdf = udf[Boolean, String](text => text != null && !text.isEmpty)
     def isDigitsUdf = udf[Boolean, String](idAsString => idAsString.forall(_.isDigit))
     
+    //For reading the airline tweets file and testing on the columns
     Main.spark.read
               .option("header", "true")
               .option("inferSchema", "true")
@@ -42,4 +45,5 @@ object Provided {
   }
 }
 
+//Create a labeledTweet class template to be used for tweets that have labeled sentiment anaysis
 case class LabeledTweet(label: Double, override val text: String, override val id: String) extends BaseTweet(text, id)
