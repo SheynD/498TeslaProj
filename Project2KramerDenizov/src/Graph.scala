@@ -10,11 +10,12 @@ import org.apache.spark.mllib.feature.{StandardScaler, StandardScalerModel}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.mllib.linalg.{Vector, Vectors}
 
+//The preliminary graph of tweets counts and closing stock prices (no quantitative analysis yet)
 object Graph {
   
-  
+  //Plot the tweet counts for each day in the dataset (around 689 days total) using Plotley
   def plotTweetsPerDay(teslaDS: Dataset[Tweet], savePlot: Boolean) = {
-     
+    //Group the tweet counts by day and graph them as such
     val tweetsPerDayDS = teslaDS.groupBy("date")
 	                              .agg(count("*") as "tweetsPerDay")
 	                              .orderBy($"tweetsPerDay")
@@ -35,7 +36,8 @@ object Graph {
     
     bar
   }
-  
+
+  //Plot the stock price for each day by getting the closing price from the database using Plotly
   def plotStockPerDay(stockDS: Dataset[StockPrice], savePlot: Boolean): Bar = {
     val stockPrices = stockDS.select('close).collect.map(_.getAs[Double](0)).toSeq;                            
 	  val labels: Seq[String] = stockDS.select('date).collect.map(_.getAs[java.sql.Date](0).toString).toSeq;    
@@ -54,6 +56,7 @@ object Graph {
     bar
   }
   
+//Plot the normalize stock daily stock prices and tweet counts using Plotley
   def plotStockAndTweetsPerDay(teslaDS: Dataset[Tweet], stockDS: Dataset[StockPrice]) = {
     
     //normalize tweet counts
