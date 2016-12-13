@@ -27,13 +27,15 @@ import edu.stanford.nlp.ling._
 import java.util.Properties
 import org.apache.spark.sql.SaveMode
 
+//The actual model for using on the Tesla tweet and stock price datasets, with cross validation
 object TeslaModel {
   
+  //The constant number of max tweets to use from a day in training/testing the classifier
   val MAX_TWEETS_PER_DAY = 200
   
   val teslaDS: Dataset[Tweet] = Preprocessing.loadTeslaTweets	 
  
-  
+  //Tweet features to customize for the model (for instance, don't use Saturday and Sunday because they're not trading days)
   def createTweetOtherFeatures() = {
     
     val isWeekDay: (java.sql.Date => Boolean) = (date: java.sql.Date) => {
@@ -45,11 +47,13 @@ object TeslaModel {
         case _ => true
       }
     }
+    //Used for weekdays (trading days)
     val isWeekDayUdf = udf(isWeekDay)
     
     //filter out weekends and group by date
     val teslaDSGrouped = teslaDS.filter(isWeekDayUdf('date)).groupBy('date)
     
+    //Group the tweet counts and sum the retweets
     val teslaDSTweetCount = teslaDSGrouped.count().withColumnRenamed("count", "tweetCount")
     val teslaDSSumFavoritesRetweets = teslaDSGrouped.sum().withColumnRenamed("sum(retweets)", "sumRetweets").withColumnRenamed("sum(favorites)", "sumFavorites")
     
@@ -58,6 +62,7 @@ object TeslaModel {
     teslaDSFeatures
   }
   
+  //Label the days of the week for the stock price value and get the day from the date shown in the dataset
   def createLabeledPriceDays() = {
     val teslaStockPriceDS = Preprocessing.loadTeslaStockPrice.select('date, 'close).withColumnRenamed("close", "price")
        
@@ -87,9 +92,12 @@ object TeslaModel {
     stockBothDS.withColumn("label", labelPriceDeltaUdf('price, 'nextDayPrice))
   }
   
+  //Create the features to be used by the model
   def createAllFeatures() = {
+    //Path to file that gives features to be used
     val path = "data/savedFeatures/featuresDS"
     
+    //Try reading the file and if exception, create other features manually
     try{
       Main.spark.read.load(path)
     }catch{
@@ -114,6 +122,7 @@ object TeslaModel {
     }
   }
   
+ //Use NLP to classify the tweets and get the sentiment value
   def computeSentimentByNLP() = {
     val teslaGroupedRDD = teslaDS.rdd.groupBy(_.date)
  
@@ -130,6 +139,7 @@ object TeslaModel {
     computeSentimentDatedTweet(teslaDatedTweets)
   }
   
+  //Use Word2Vec to classify the tweets and get the sentiment value
   def computeSentimentByWord2Vec(word2VecModel: Word2VecModel) = {
     val teslaGroupedRDD = teslaDS.rdd.groupBy(_.date)
  
@@ -145,6 +155,7 @@ object TeslaModel {
     teslaWord2Vec
   }
   
+  //Convert the tweet text to a Word2Vec vector using filters and model transformations
   def convertTweetsToWord2Vec(tweets: Dataset[Tweet], word2VecModel: Word2VecModel) = {
     val teslaWordsArrayDS = tweets.map{ tweet => 
       val words = tweet.text.replaceAll(handlePattern, "").split(" ").filterNot(_.isEmpty).filter(_.exists(c => c.isLetterOrDigit))
@@ -153,6 +164,7 @@ object TeslaModel {
     
     val word2VecTweets = word2VecModel.transform(teslaWordsArrayDS)   
     
+    //MinMaxScale the features and results of the labels
     val scaler = new MinMaxScaler()
                 .setInputCol("result")
                 .setOutputCol("features")
@@ -161,7 +173,7 @@ object TeslaModel {
     scalerModel.transform(word2VecTweets).as[Word2VecTweet]   
   }
   
-  
+  //Run the different models (Random Forest, Multilayerperceptron, Naive Bayes) as an ensemble model
   def runModels(tweets: Dataset[Word2VecTweet], rfModel: RandomForestClassificationModel, nnModel: MultilayerPerceptronClassificationModel, nbModel: NaiveBayesModel) = {
     
     //ensemble                  
@@ -178,7 +190,8 @@ object TeslaModel {
 	                             .withColumnRenamed("prediction", "nbPrediction")
 	  rfPredictions.show
 	  val allPredictions = rfPredictions.join(nnPredictions, Seq("date","id","text")).join(nbPredictions, Seq("date","id","text"))
-	                             
+	  
+	  //Vote on the label using ranked voting system from predictions of ensemble methods
 	  def rankedVoting: (Double, Double, Double) => Double = (pred1: Double, pred2: Double, pred3: Double) => { 
 	    val votes = Array(pred1, pred2, pred3)
 	    val groupedVotes = votes.groupBy(identity) //group by votes
@@ -203,6 +216,7 @@ object TeslaModel {
 	  }
   }
   
+  //Perform the sentiment analysis by removing any emojis or handles and using the Stanford NLP to tag and process tweets
   def performSentiment(tweet : DatedTweet, pipeline : StanfordCoreNLP) = {
   
     val text = tweet.text.replaceAll(emojiPattern, "")
@@ -224,7 +238,7 @@ object TeslaModel {
       }
       sentiment
 	  }
-    
+    //Compute the total sentiment of each day's tweets
     val totalSentiment = sentiments.sum match {
       case negative if(negative < -3) => -1
       case positive if(positive > 1) => 1
