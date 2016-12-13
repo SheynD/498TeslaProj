@@ -7,7 +7,9 @@ import org.apache.spark.sql.Dataset
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.types._
 
+//Preprocesses the tweets and files in order to perform data collections, label predictions, and classification
 object Preprocessing {
+  //The paths for the data files for tweets and stock prices
   val rawTeslaTweetPath = "data/tweets/teslaRaw/*"
   val teslaDSPath = "data/tweets/teslaDS"
   val rawTeslaStockPricePath = "data/stock/teslaStockHistory.csv"
@@ -22,7 +24,8 @@ object Preprocessing {
       Main.spark.read.load(teslaDSPath).as[Tweet].dropDuplicates("id") 
     }catch{
       case ex: Throwable => 
-
+      
+      //Convert the RDD to a tweet sequence using regex statements
       	def convertStringRDDToTweetSeq(rdd: RDD[String]): Seq[Tweet] = {
       			def splitLine(line: String): Array[String] = {
       					val semicolonsOutsideOfQuotesPattern = """;(?=(?:[^"]*"[^"]*")*[^"]*$)"""
@@ -63,6 +66,7 @@ object Preprocessing {
   }
   
   
+  //Load the stock price CSV file and select the columns of interest, and put them into 
   def loadTeslaStockPrice(): Dataset[StockPrice] = {
     val rawDF = Main.spark.read.option("header", "true").csv(rawTeslaStockPricePath)
     rawDF.select(rawDF("date").cast(DateType),
@@ -76,7 +80,7 @@ object Preprocessing {
   }
 }
 
-
+//Create a constant Tweet class template with the following attributes
 final case class Tweet(username: String,
                        timestamp: java.sql.Timestamp,
                        date: java.sql.Date,
@@ -89,13 +93,12 @@ final case class Tweet(username: String,
                        id: String,
                        permalink: String) extends Serializable 
                   
-                       
+//Create a constant StockPrice class template with the following attributes
 final case class StockPrice(date: java.sql.Date,
                             open: Double,
                             high: Double,
                             low: Double,
                             close: Double,
                             volume: Long,
-                            adjClose: Double)
-                            
+                            adjClose: Double)          
                        
