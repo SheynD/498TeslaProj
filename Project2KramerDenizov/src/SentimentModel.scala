@@ -16,9 +16,11 @@ import org.apache.spark.ml.linalg.Vector
 import org.apache.spark.ml.feature.MinMaxScaler
 
 object SentimentModel {
+  //Regex statements for handling different patterns that appear in tweets, such as emojis or Twitter handles
   val emojiPattern = """[\p{So}+|\uFE0F]"""
   val handlePattern = """@[\w|_]+"""
   
+  //Get the sentiment value for a labeled tweet in the dataset
   def computeSentimentLabeledTweet(tweetDS: Dataset[LabeledTweet]) = {
     tweetDS.mapPartitions{ part => 
 	    val pipeline = createStandfordNLP
@@ -26,6 +28,7 @@ object SentimentModel {
 	  }
   }
   
+   //Use NLP to tage the tweet and get a sentiment value for each tweet in a given day
    def computeSentimentDatedTweet(tweetDS: Dataset[DatedTweet]) = {
     tweetDS.mapPartitions{ part => 
 	    val pipeline = createStandfordNLP
@@ -34,8 +37,10 @@ object SentimentModel {
   }
   
 
+  //Perform the sentiment analysis by normalizing text and analyzing each sentence
   def performSentiment(tweet : BaseTweet, pipeline : StanfordCoreNLP) = {
   
+    //Remove emojis and handles from all tweets
     val text = tweet.text.replaceAll(emojiPattern, "")
                          .replaceAll(handlePattern, "")
 
@@ -56,6 +61,7 @@ object SentimentModel {
       sentiment
 	  }
     
+    //Sum up the sentiment values and assign them to one of three cases
     val totalSentiment = sentiments.sum match {
       case negative if(negative < -3) => 0
       case positive if(positive > 1) => 2
@@ -72,6 +78,7 @@ object SentimentModel {
     new StanfordCoreNLP(stanfordProps)
 	}
 	
+  //Word2Vec algorithm for classifying tweets
   def computeWord2Vec(tweetDS: Dataset[LabeledTweet]) = {
 	  val word2vec = new Word2Vec()
   	                    .setInputCol("wordsArray")
@@ -98,6 +105,7 @@ object SentimentModel {
 
 }
 
+//Create classes for different types of classified and unclassified tweets and use them to analyze the result
 class BaseTweet(val text: String, val id: String) extends Serializable 
 case class SentimentTweet(label: Double, override val text: String, override val id: String, sentiment: Double) extends BaseTweet(text, id)
 case class LabeledWord2VecTweet(label: Double, override val text: String, override val id: String, features: Vector) extends BaseTweet(text, id)
