@@ -17,6 +17,7 @@ import org.apache.spark.mllib.util.MLUtils
 import org.apache.spark.sql.Row
 import org.apache.spark.ml.linalg.Vector
 
+//The main object that initializes Spark and sets up the data analysis and prediction metrics
 object Main {
 
   //initialize spark
@@ -95,6 +96,7 @@ object Main {
 
     val kfolds = MLUtils.kFold(teslaWithFeatures, numFolds = 10, seed = 100)
     
+    //The recall value metric
     val recall = kfolds.map{ tuple =>
 	    val training = tuple._1.map(row => (row.getDouble(0), row.getAs[Vector](1))).toDF("label", "features")
 	    val testing =  tuple._2.map(row => (row.getDouble(0), row.getAs[Vector](1))).toDF("label", "features")
@@ -114,13 +116,15 @@ object Main {
                           .setLabelCol("label")
                           .setPredictionCol("prediction")
                           .setMetricName("weightedRecall")
-                          
+                         
+      //Calculate the recall metric
       val recall = evaluator.evaluate(predictions)
       recall
 	  }.sum / kfolds.size
     
 	  println(s"recall: $recall")
 
+    //The runtime of the classifier 
     val totalTime = (System.nanoTime - startTime)/1E9
     println(s"Time: $totalTime")
     
