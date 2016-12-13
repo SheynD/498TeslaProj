@@ -29,7 +29,7 @@ import org.apache.spark.sql.SaveMode
 
 object TeslaModel {
   
-  val MAX_TWEETS_PER_DAY = 50
+  val MAX_TWEETS_PER_DAY = 200
   
   val teslaDS: Dataset[Tweet] = Preprocessing.loadTeslaTweets	 
  
@@ -95,11 +95,19 @@ object TeslaModel {
     }catch{
       case ex: Throwable => 
 
-      val otherFeatures = createTweetOtherFeatures.join(createLabeledPriceDays, "date").sort('date)
+      val other = createTweetOtherFeatures
+      
+      println("other count:" + other.count)
+      
+      val otherFeatures = other.join(createLabeledPriceDays, "date").sort('date)
+      
+      println("other features count:" + otherFeatures.count)
       
       val dateTextIDSentiment = computeSentimentByNLP
       val sentimentDS = dateTextIDSentiment.groupBy('date).sum("sentiment").withColumnRenamed("sum(sentiment)", "totalSentiment")
       
+      println("sentiment count:" + sentimentDS.count)
+        
       val allFeatures = otherFeatures.join(sentimentDS, "date")
       allFeatures.write.mode(SaveMode.Overwrite).save(path) 
       allFeatures
@@ -116,6 +124,8 @@ object TeslaModel {
     }.flatMap(identity).toDS().as[Tweet]
     
     val teslaDatedTweets: Dataset[DatedTweet] = teslaRandomDS.map(tweet => DatedTweet(tweet.date, tweet.text, tweet.id))
+    
+    println("total tweets count:" + teslaDatedTweets.count)
     
     computeSentimentDatedTweet(teslaDatedTweets)
   }

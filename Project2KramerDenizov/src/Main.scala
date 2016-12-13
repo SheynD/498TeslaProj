@@ -12,6 +12,10 @@ import org.apache.spark.ml.classification.MultilayerPerceptronClassifier
 import org.apache.spark.ml.classification.NaiveBayes
 import org.apache.spark.sql.functions.udf
 import org.apache.spark.sql.Dataset
+import org.apache.spark.ml.feature.VectorAssembler
+import org.apache.spark.mllib.util.MLUtils
+import org.apache.spark.sql.Row
+import org.apache.spark.ml.linalg.Vector
 
 object Main {
 
@@ -80,15 +84,47 @@ object Main {
     * 
     */
     */
-    TeslaModel.createAllFeatures.show
+    val tesla = TeslaModel.createAllFeatures.drop('date).drop('price).drop('nextDayPrice)
     
-   
-	  
+    val assembler = new VectorAssembler()
+                        .setInputCols(Array("tweetCount", "sumRetweets", "sumFavorites", "totalSentiment"))
+                        .setOutputCol("features")
+    
+            println(tesla.count)            
+    val teslaWithFeatures: RDD[Row] = assembler.transform(tesla).drop('tweetCount).drop('sumRetweets).drop('sumFavorites).drop('totalSentiment).rdd
+
+    val kfolds = MLUtils.kFold(teslaWithFeatures, numFolds = 10, seed = 100)
+    
+    val recall = kfolds.map{ tuple =>
+	    val training = tuple._1.map(row => (row.getDouble(0), row.getAs[Vector](1))).toDF("label", "features")
+	    val testing =  tuple._2.map(row => (row.getDouble(0), row.getAs[Vector](1))).toDF("label", "features")
+	    
+  	  //random forest
+  	  val rf = new RandomForestClassifier()
+              .setLabelCol("label")
+              .setFeaturesCol("features")
+              .setNumTrees(100)
+  	   
+      val rfModel = rf.fit(training)
+     
+      val predictions = rfModel.transform(testing)
+  	  
+      // Select (prediction, true label) and compute test error.
+      val evaluator = new MulticlassClassificationEvaluator()
+                          .setLabelCol("label")
+                          .setPredictionCol("prediction")
+                          .setMetricName("weightedRecall")
+                          
+      val recall = evaluator.evaluate(predictions)
+      recall
+	  }.sum / kfolds.size
+    
+	  println(s"recall: $recall")
+
     val totalTime = (System.nanoTime - startTime)/1E9
     println(s"Time: $totalTime")
     
     
-	
 
 	}
 }
